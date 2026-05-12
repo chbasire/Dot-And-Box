@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Dots Ultimate</title>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+body{font-family:Arial;text-align:center;background:url('https://upload.wikimedia.org/wikipedia/commons/8/80/World_map_-_low_resolution.svg');background-size:cover}
+.box{background:#fff;padding:10px;margin:10px;display:inline-block}
+canvas{background:#fff;border:2px solid #000}
+</style>
+</head>
+<body>
+<h2>Dots & Boxes ULTIMATE</h2>
+<div class="box">
+P1:<input id="p1"><br>
+P2:<input id="p2"><br>
+Grid:<input id="size" value="4"><br>
+<button onclick="createRoom()">Create</button>
+<input id="room"><button onclick="joinRoom()">Join</button>
+<p id="info"></p>
+<p id="score"></p>
+</div>
+<canvas id="cv" width="500" height="500"></canvas>
+<script>
+const s=io();let room="";
+let size=4,spacing=100,turn=1;
+let lines=[],boxes={},scores={1:0,2:0};
+const ctx=cv.getContext('2d');
+
+function createRoom(){init();s.emit('createRoom');}
+function joinRoom(){room=document.getElementById('room').value;init();s.emit('joinRoom',room);} 
+
+function init(){size=parseInt(sizeInput.value||4);spacing=400/(size-1);lines=[];boxes={};scores={1:0,2:0};draw();}
+
+s.on('roomCreated',r=>{room=r;info.innerText='Room:'+r});
+s.on('startGame',st=>{Object.assign(lines,st.lines);boxes=st.boxes;draw();});
+s.on('sync',st=>{lines=st.lines;boxes=st.boxes;scores=st.scores;turn=st.currentPlayer;draw();updateScore();});
+
+cv.onclick=e=>{
+ if(!room)return;
+ let x=e.offsetX,y=e.offsetY;
+ for(let i=0;i<size;i++){for(let j=0;j<size;j++){
+  let px=j*spacing+50,py=i*spacing+50;
+  if(Math.abs(y-py)<10&&x>px&&x<px+spacing)add(px,py,px+spacing,py);
+  if(Math.abs(x-px)<10&&y>py&&y<py+spacing)add(px,py,px,py+spacing);
+ }}
+};
+
+function add(x1,y1,x2,y2){
+ if(lines.find(l=>l.x1==x1&&l.y1==y1&&l.x2==x2&&l.y2==y2))return;
+ lines.push({x1,y1,x2,y2,p:turn});
+ if(!check())turn=turn===1?2:1;
+ send();draw();
+}
+
+function check(){let got=false;
+ for(let i=0;i<size-1;i++){for(let j=0;j<size-1;j++){
+  let k=i+'-'+j;if(boxes[k])continue;
+  let t=h(j,i,j+1,i),l=h(j,i,j,i+1),r=h(j+1,i,j+1,i+1),b=h(j,i+1,j+1,i+1);
+  if(t&&l&&r&&b){boxes[k]={x:j*spacing+50,y:i*spacing+50,p:turn};scores[turn]++;got=true; audioPlay();}
+ }}return got;
+}
+
+function h(x1,y1,x2,y2){return lines.some(l=>l.x1==x1*spacing+50&&l.y1==y1*spacing+50&&l.x2==x2*spacing+50&&l.y2==y2*spacing+50);} 
+
+function draw(){ctx.clearRect(0,0,500,500);
+ for(let k in boxes){let b=boxes[k];ctx.fillStyle=b.p==1?'lightblue':'pink';ctx.fillRect(b.x,b.y,spacing,spacing);} 
+ lines.forEach(l=>{ctx.beginPath();ctx.moveTo(l.x1,l.y1);ctx.lineTo(l.x2,l.y2);ctx.strokeStyle=l.p==1?'blue':'red';ctx.stroke();});
+ for(let i=0;i<size;i++){for(let j=0;j<size;j++){ctx.beginPath();ctx.arc(j*spacing+50,i*spacing+50,5,0,2*Math.PI);ctx.fill();}}
+ updateScore();}
+
+function updateScore(){score.innerText='Score P1:'+scores[1]+' | P2:'+scores[2]+' Turn:'+turn;}
+
+function send(){s.emit('update',{c:room,state:{lines,boxes,scores,currentPlayer:turn}});} 
+
+function audioPlay(){let a=new Audio('https://www.soundjay.com/button/sounds/button-4.mp3');a.play();}
+</script>
+</body></html>
